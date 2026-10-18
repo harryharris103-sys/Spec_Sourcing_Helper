@@ -2,6 +2,10 @@
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Spec Sourcing Helper</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#1d5fd1">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
 <style>
 :root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#f6f5f1;--card:#fff;--tx:#1d1d1b;--mut:#6b6a64;--bd:#dcdad2;--ac:#1d5fd1;--ok:#1b7a43;--warn:#b25e00;--gs:#7a4fd0}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#161615;--card:#212120;--tx:#ecebe6;--mut:#a09f97;--bd:#3a3a37;--ac:#6ea0ff;--ok:#5fcf8b;--warn:#f0a040;--gs:#b79cf5}}
@@ -154,4 +158,7 @@ $('loc').onchange=refresh;
 $('cp').onclick=function(){var t=$('rfq');t.select();var ok=false;try{ok=document.execCommand('copy')}catch(e){}
  try{if(navigator.clipboard){navigator.clipboard.writeText(t.value);ok=true}}catch(e){}
  $('cps').textContent=ok?'Copied.':'Select the text and copy it manually.'};
-</script></main></body></html>
+</script></main><script>
+if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(e){console.warn('SW failed',e)})})}
+</script>
+</body></html>
