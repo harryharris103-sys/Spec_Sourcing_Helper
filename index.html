@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Spec Sourcing Helper</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#f6f5f1;--card:#fff;--tx:#1d1d1b;--mut:#6b6a64;--bd:#dcdad2;--ac:#1d5fd1;--ok:#1b7a43;--warn:#b25e00;--gs:#7a4fd0}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#161615;--card:#212120;--tx:#ecebe6;--mut:#a09f97;--bd:#3a3a37;--ac:#6ea0ff;--ok:#5fcf8b;--warn:#f0a040;--gs:#b79cf5}}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:900px;margin:0 auto;padding:16px}
+h1{font-size:20px;margin:4px 0}h2{font-size:15px;margin:0 0 8px}
+p.s{color:var(--mut);margin:0 0 12px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px;margin-bottom:14px}
+textarea,input,select{width:100%;font:inherit;color:var(--tx);background:var(--bg);border:1px solid var(--bd);border-radius:8px;padding:8px}
+textarea{min-height:140px;resize:vertical}
+button{font:inherit;border:1px solid var(--bd);background:var(--card);color:var(--tx);border-radius:8px;padding:8px 12px;cursor:pointer}
+button.p{background:var(--ac);border-color:var(--ac);color:#fff}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;align-items:center}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px}
+label{font-size:12px;color:var(--mut);display:flex;justify-content:space-between;margin-bottom:2px}
+.b{font-size:11px;padding:0 6px;border-radius:99px;border:1px solid currentColor}
+.matched{color:var(--ok)}.guessed{color:var(--warn)}.manual{color:var(--gs)}
+.un{display:flex;gap:8px;align-items:center;margin-bottom:6px;flex-wrap:wrap}
+.un span{flex:1 1 200px;background:var(--bg);border:1px dashed var(--bd);border-radius:8px;padding:6px 8px}
+.un select{width:190px}
+.w{border-left:3px solid var(--warn);padding:4px 10px;margin:6px 0;background:var(--bg);border-radius:0 8px 8px 0}
+.q{border-top:1px solid var(--bd);padding:8px 0}.q:first-child{border-top:0}
+.q code{display:block;word-break:break-word;margin:2px 0 6px}
+.q a{margin-right:10px;color:var(--ac)}
+.x{overflow-x:auto}
+</style></head><body><main>
+<h1>Spec Sourcing Helper</h1>
+<p class="s">Paste the full spec as you received it. The page sorts the details into fields, flags anything unclear, and builds search queries and an RFQ draft. Everything runs in your browser.</p>
+<div class="card"><h2>1. Paste the spec</h2>
+<textarea id="raw" placeholder="Paste the item description, quantity and unit, and any notes…"></textarea>
+<div class="row"><button class="p" id="go">Break it down</button><button id="s1">Load example: pull wire</button><button id="s2">Load example: butterfly valve</button><button id="clr">Clear</button></div></div>
+<div id="out" hidden>
+<div class="card"><h2>2. Check the breakdown</h2><p class="s">Green = read from a labelled line, amber = guessed, purple = edited by you. Edit any field and the searches update.</p><div class="grid" id="fields"></div></div>
+<div class="card" id="unc" hidden><h2>Could not place these</h2><p class="s">Pick the field each belongs to, or ignore it.</p><div id="unl"></div></div>
+<div class="card"><h2>3. Things to confirm with the requester</h2><div id="warn"></div></div>
+<div class="card"><h2>4. Searches</h2><label style="justify-content:flex-start;gap:6px;font-size:14px;color:var(--tx)"><input type="checkbox" id="loc" checked style="width:auto"> Include a local (Ghana) search</label><div id="qs"></div></div>
+<div class="card"><h2>5. RFQ draft</h2><textarea id="rfq" style="min-height:260px"></textarea><div class="row"><button id="cp">Copy RFQ</button><span id="cps" class="s"></span></div></div>
+</div>
+<script>
+var FIELDS=[['itemName','Item title'],['itemClass','Item class'],['qty','Quantity'],['unit','Unit'],['manufacturer','Manufacturer / brand'],['partNo','Part number'],['type','Type'],['size','Size / diameter'],['rating','Pressure / rating'],['connection','Connection'],['standards','Standards / flanges'],['materials','Materials'],['operation','Operation / actuator'],['color','Colour'],['structure','Structure'],['application','Used on / application'],['notes','Other notes']];
+var EX1="ITEM DESCRIPTION QTY UNIT\nWIRE:PULL RED PVC DAVIS DERBY 41 032 003   4.000 EA\n\nWIRE: MANUFACTURER: DAVIS DERBY, PART NO: 41 032 003; TYPE: PULL WIRE; DIAMETER: 5 MM; MATERIAL: STEEL; STRUCTURE: 3/16\"; COLOR:; ADDITIONAL INFORMATION: WITH RED PVC COVERING; USED ON: CONVEYOR BELTS";
+var EX2="ITEM DESCRIPTION QTY UNIT\nVALVE BTRFL:WFR ACTR 8IN HUK   1.000 EA\nDA2014WG16\n\nVALVE, BUTTERFLY: PART NO: DA 2014WG 16; TYPE: WAFER; VALVE SIZE: 8 IN; DESIGN RATING: PN16; CONNECTION TYPE: LUG; CONNECTION SIZE: TO SUIT FLANGES: PN6; PN10; PN16; ANSI150; BS10 TABLE E; BODY MATERIAL: CAST IRON; OPERATED: DOUBLE ACTING PRISMA PNEUMATIC ACTUATOR; LINING MATERIAL: CI/SS/SILICONE; BRAND: HUK";
+var S={f:{},src:{},un:[],blank:[],raw:''};
+function $(i){return document.getElementById(i)}
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+function mapKey(k){var s=k.toLowerCase();
+ if(/manufactur|^brand|^make$|^mfr|^supplier|^oem/.test(s))return'manufacturer';
+ if(/part\s*(no|num)|^p\/?n$|model|catalog|article|type no|^ref/.test(s))return'partNo';
+ if(/flange|drill|standard/.test(s))return'standards';
+ if(/connection|^end|thread/.test(s))return'connection';
+ if(/rating|pressure|^pn$|class/.test(s))return'rating';
+ if(/material|lining|seat|seal|disc|body/.test(s))return'materials';
+ if(/operat|actuat|drive|power|control/.test(s))return'operation';
+ if(/colou?r/.test(s))return'color';
+ if(/structure|construction|strand/.test(s))return'structure';
+ if(/used|applic|usage/.test(s))return'application';
+ if(/additional|remark|note|info|comment/.test(s))return'notes';
+ if(/size|diameter|dia$|length|width|thick|dn|nominal/.test(s))return'size';
+ if(/^type|style/.test(s))return'type';
+ return null}
+function add(n,v,src){v=(v||'').trim();if(!v)return;
+ if(S.f[n]){if(S.f[n].toLowerCase().indexOf(v.toLowerCase())<0)S.f[n]+=(n==='materials'?'\n':', ')+v}else{S.f[n]=v;S.src[n]=src}}
+function guess(chunk){var c=chunk.trim();if(!c)return;
+ if(/\b(PN|DN|ANSI|BS|DIN|ISO|ASTM|API|JIS)\s?\d/i.test(c)){add(/^PN\s?\d+$/i.test(c)?'rating':'standards',c,'guessed');return}
+ if(/steel|iron|brass|bronze|ptfe|rubber|nbr|epdm|silicone|pvc|alumin|copper|nylon|viton|stainless|plastic/i.test(c)){add('materials',c,'guessed');return}
+ if(/\b\d+(\.\d+)?\s?(mm|cm|in|inch|"|m)\b/i.test(c)){add('size',c,'guessed');return}
+ S.un.push(c)}
+var KEY=/^([A-Za-z][A-Za-z \/\-.]{1,30}?):\s*(.*)$/;
+function parse(raw){
+ S={f:{},src:{},un:[],blank:[],raw:raw};
+ var t=raw.replace(/\r/g,'').replace(/^\s*ITEM DESCRIPTION.*$/im,'').trim();if(!t)return;
+ var blocks=t.split(/\n\s*\n/).map(function(b){return b.trim()}).filter(Boolean);
+ var head=blocks[0],body=blocks.slice(1).join(' ');
+ if(blocks.length===1){var ls=t.split('\n');head=ls[0];body=ls.slice(1).join(' ')}
+ head=head.replace(/\s+/g,' ');
+ var qm=head.match(/(\d+(?:[.,]\d+)?)\s*(EA|PCS|PC|NOS|SETS?|MTR|M|KG|LOT|ROLL|BOX|L)\b/i);
+ if(!qm){var q2=raw.match(/(\d+(?:[.,]\d+)?)\s*(EA|PCS|PC|NOS|SETS?|MTR|M|KG|LOT|ROLL|BOX)\b/i);qm=q2}
+ if(qm){add('qty',String(parseFloat(qm[1].replace(',','.'))),'matched');add('unit',qm[2].toUpperCase(),'matched');head=head.replace(qm[0],'')}
+ head=head.replace(/\s+/g,' ').trim();
+ if(!body){body=head}else add('itemName',head,'matched');
+ var segs=body.replace(/\s+/g,' ').split(';').map(function(s){return s.trim()}).filter(Boolean),pieces=[];
+ segs.forEach(function(s){s.split(/,\s*(?=[A-Za-z][A-Za-z \/\-.]{1,30}:)/).forEach(function(p){pieces.push(p.trim())})});
+ var items=[],lead=[],labels=[],cur=null;
+ pieces.forEach(function(p){var rest=p,m,done=false;
+  while((m=rest.match(KEY))){var k=m[1].trim(),v=m[2];
+   if(KEY.test(v)&&!mapKey(k)){labels.push(k);rest=v;continue}
+   if(KEY.test(v)){cur={k:k,v:''};items.push(cur);rest=v;continue}
+   cur={k:k,v:v.trim()};items.push(cur);done=true;break}
+  if(!done){if(cur)cur.v+=(cur.v?', ':'')+rest;else lead.push(rest)}});
+ if(!items.length){pieces.forEach(guess)}
+ else{
+  var cls=lead.concat(labels).join(' ').trim();if(cls)add('itemClass',cls,'matched');
+  items.forEach(function(it){
+   if(!it.v){S.blank.push(it.k);return}
+   var f=mapKey(it.k);
+   if(!f){S.un.push(it.k+': '+it.v);return}
+   var v=it.v;
+   if(f==='materials'){var lb=it.k.replace(/material/i,'').trim();v=lb?lb+': '+v:v}
+   if(f==='standards'){var pf=it.k.replace(/flanges?|standards?|drilling/i,'').trim();v=pf?pf+': '+v:v}
+   add(f,v,'matched')})}
+ var all=raw.replace(/\s+/g,' ');
+ if(!S.f.partNo){var pm=all.match(/\b[A-Z]{1,4}\s?\d{3,}[A-Z0-9]*(?:\s?\d{2,})?\b/);if(pm&&!/^(PN|DN|BS|ANSI)/.test(pm[0]))add('partNo',pm[0],'guessed')}
+ if(!S.f.size){var sm=all.match(/\bDN\s?\d+\b|\b\d+(\.\d+)?\s?(mm|in|inch|")\b/i);if(sm)add('size',sm[0],'guessed')}
+ if(!S.f.rating){var rm=all.match(/\bPN\s?\d+\b|\bclass\s?\d+\b/i);if(rm)add('rating',rm[0],'guessed')}
+}
+function render(){
+ $('out').hidden=false;
+ $('fields').innerHTML=FIELDS.map(function(F){var n=F[0],v=S.f[n]||'',s=S.src[n]||'';
+  var tag=v&&s?'<span class="b '+s+'">'+s+'</span>':'';
+  var el=(n==='materials'||n==='notes'||n==='standards')?'<textarea data-f="'+n+'" style="min-height:60px">'+esc(v)+'</textarea>':'<input data-f="'+n+'" value="'+esc(v)+'">';
+  return'<div><label>'+F[1]+tag+'</label>'+el+'</div>'}).join('');
+ $('fields').querySelectorAll('[data-f]').forEach(function(e){e.oninput=function(){var n=e.getAttribute('data-f');S.f[n]=e.value;S.src[n]='manual';refresh()}});
+ $('unc').hidden=!S.un.length;
+ $('unl').innerHTML=S.un.map(function(u,i){return'<div class="un"><span>'+esc(u)+'</span><select data-u="'+i+'"><option value="">Assign to…</option>'+FIELDS.map(function(F){return'<option value="'+F[0]+'">'+F[1]+'</option>'}).join('')+'<option value="_x">Ignore</option></select></div>'}).join('');
+ $('unl').querySelectorAll('select').forEach(function(sel){sel.onchange=function(){var i=+sel.getAttribute('data-u'),v=sel.value;if(!v)return;var txt=S.un[i];if(v!=='_x')add(v,txt,'manual');S.un.splice(i,1);if(v!=='_x')S.src[v]=S.src[v]==='matched'?'matched':'manual';render();refresh()}});
+ refresh()}
+function g(n){return(S.f[n]||'').trim()}
+function refresh(){
+ var w=[],txt=(S.raw+' '+Object.keys(S.f).map(function(k){return S.f[k]}).join(' '));
+ if(!g('partNo'))w.push('No part number found. Searches will rely on the functional description, so matches will be equivalents, not exact.');
+ else if(/\s/.test(g('partNo')))w.push('The part number contains spaces. Both the spaced and joined forms are searched, since suppliers list it either way.');
+ if(!g('manufacturer'))w.push('No manufacturer or brand found. Ask the requester whether an equivalent brand is acceptable.');
+ if(!g('qty'))w.push('No quantity found.');
+ if(g('unit').toUpperCase()==='EA'&&/wire|cable|rope|hose|pipe|chain|belt|tube|cord/i.test(g('itemClass')+' '+g('itemName')+' '+g('type')))w.push('The unit is EA, but this kind of item is usually sold by length. Confirm whether the quantity means pieces, metres or coils, and the length of each.');
+ if(/\blug\b/i.test(txt)&&/\bwafer\b/i.test(txt))w.push('The spec mentions both LUG and WAFER. These are different valve body styles, so confirm which one is needed.');
+ if(g('size')&&g('structure')&&/\d/.test(g('size'))&&/\d/.test(g('structure')))w.push('Both Size and Structure carry dimensions ("'+g('size')+'" and "'+g('structure')+'"). Confirm which is the overall diameter and which is the core or construction.');
+ if(/to suit/i.test(g('standards')))w.push('The flange standard is given as "to suit" a list. Confirm the actual pipework flange (PN or ANSI) so the right drilling is supplied.');
+ if(S.blank.length)w.push('Left blank in the source: '+S.blank.join(', ')+'. Confirm if it matters.');
+ if(S.un.length)w.push(S.un.length+' detail(s) are still unplaced. Assign them above so they are included in searches and the RFQ.');
+ $('warn').innerHTML=w.length?w.map(function(x){return'<div class="w">'+esc(x)+'</div>'}).join(''):'<p class="s">Nothing obvious to flag.</p>';
+ var mfr=g('manufacturer'),pn=g('partNo'),qs=[];
+ if(pn){var pj=pn.replace(/\s+/g,'');qs.push(['Exact part number',(mfr?mfr+' ':'')+'"'+pn+'"']);if(pj!==pn)qs.push(['Part number, joined form',(mfr?mfr+' ':'')+'"'+pj+'"']);
+  qs.push(['Datasheet or catalogue',[mfr,pj,'datasheet'].join(' ').trim()]);qs.push(['Where to buy',[mfr,pj,'buy price supplier export'].join(' ').trim()])}
+ var mats=g('materials').split('\n').slice(0,3).join(' ');
+ var fn=[g('itemClass'),g('type'),g('size'),g('rating'),mats,g('operation'),g('color')].join(' ').replace(/\s+/g,' ').trim();
+ if(fn){qs.push(['Equivalent by specification',fn]);if($('loc').checked)qs.push(['Local supplier (Ghana)',fn+' supplier Accra Ghana'])}
+ $('qs').innerHTML=qs.length?qs.map(function(q){var e=encodeURIComponent(q[1]);
+  return'<div class="q"><strong>'+esc(q[0])+'</strong><code>'+esc(q[1])+'</code><a target="_blank" rel="noopener" href="https://www.google.com/search?q='+e+'">Google</a><a target="_blank" rel="noopener" href="https://www.bing.com/search?q='+e+'">Bing</a><a target="_blank" rel="noopener" href="https://www.alibaba.com/trade/search?SearchText='+e+'">Alibaba</a><a target="_blank" rel="noopener" href="https://www.google.com/search?tbm=shop&q='+e+'">Shopping</a></div>'}).join(''):'<p class="s">Add some details to generate searches.</p>';
+ var L=['Subject: Request for quotation – '+(g('itemName')||g('itemClass')||'item'),'','Hello,','','Please quote for the following:','','Item: '+(g('itemName')||g('itemClass')),'Quantity: '+[g('qty'),g('unit')].join(' ').trim()];
+ FIELDS.forEach(function(F){var n=F[0];if(['itemName','qty','unit'].indexOf(n)>=0)return;var v=g(n);if(v)L.push(F[1]+': '+v.replace(/\n/g,'; '))});
+ L.push('','Please confirm: unit and total price, availability and lead time, country of origin, shipping terms to Accra, Ghana, quote validity, and any equivalent you can offer (with differences stated).','','Regards,','[Your name / company]');
+ $('rfq').value=L.join('\n')}
+$('go').onclick=function(){var r=$('raw').value;if(!r.trim())return;parse(r);render()};
+$('s1').onclick=function(){$('raw').value=EX1;parse(EX1);render()};
+$('s2').onclick=function(){$('raw').value=EX2;parse(EX2);render()};
+$('clr').onclick=function(){$('raw').value='';$('out').hidden=true;S={f:{},src:{},un:[],blank:[],raw:''}};
+$('loc').onchange=refresh;
+$('cp').onclick=function(){var t=$('rfq');t.select();var ok=false;try{ok=document.execCommand('copy')}catch(e){}
+ try{if(navigator.clipboard){navigator.clipboard.writeText(t.value);ok=true}}catch(e){}
+ $('cps').textContent=ok?'Copied.':'Select the text and copy it manually.'};
+</script></main></body></html>
