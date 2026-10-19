@@ -2,6 +2,10 @@
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Spec Sourcing Helper</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#1d5fd1">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
 <style>
 :root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#f6f5f1;--card:#fff;--tx:#1d1d1b;--mut:#6b6a64;--bd:#dcdad2;--ac:#1d5fd1;--ok:#1b7a43;--warn:#b25e00;--gs:#7a4fd0}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#161615;--card:#212120;--tx:#ecebe6;--mut:#a09f97;--bd:#3a3a37;--ac:#6ea0ff;--ok:#5fcf8b;--warn:#f0a040;--gs:#b79cf5}}
@@ -13,7 +17,7 @@ h1{font-size:20px;margin:4px 0}h2{font-size:15px;margin:0 0 8px}
 p.s{color:var(--mut);margin:0 0 12px}
 .card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px;margin-bottom:14px}
 textarea,input,select{width:100%;font:inherit;color:var(--tx);background:var(--bg);border:1px solid var(--bd);border-radius:8px;padding:8px}
-textarea{min-height:140px;resize:vertical}
+textarea{min-height:150px;resize:vertical}
 button{font:inherit;border:1px solid var(--bd);background:var(--card);color:var(--tx);border-radius:8px;padding:8px 12px;cursor:pointer}
 button.p{background:var(--ac);border-color:var(--ac);color:#fff}
 .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;align-items:center}
@@ -28,14 +32,16 @@ label{font-size:12px;color:var(--mut);display:flex;justify-content:space-between
 .q{border-top:1px solid var(--bd);padding:8px 0}.q:first-child{border-top:0}
 .q code{display:block;word-break:break-word;margin:2px 0 6px}
 .q a{margin-right:10px;color:var(--ac)}
-.x{overflow-x:auto}
+.it{display:block;width:100%;text-align:left;margin-bottom:6px}.it.on{border-color:var(--ac);box-shadow:0 0 0 1px var(--ac)}
 </style></head><body><main>
 <h1>Spec Sourcing Helper</h1>
-<p class="s">Paste the full spec as you received it. The page sorts the details into fields, flags anything unclear, and builds search queries and an RFQ draft. Everything runs in your browser.</p>
-<div class="card"><h2>1. Paste the spec</h2>
-<textarea id="raw" placeholder="Paste the item description, quantity and unit, and any notes…"></textarea>
-<div class="row"><button class="p" id="go">Break it down</button><button id="s1">Load example: pull wire</button><button id="s2">Load example: butterfly valve</button><button id="clr">Clear</button></div></div>
+<p class="s">Paste one or many specs exactly as received. The page splits them into items, sorts the details into fields, flags anything unclear, and builds search queries and RFQ drafts. Everything runs in your browser.</p>
+<div class="card"><h2>1. Paste the spec(s)</h2>
+<textarea id="raw" placeholder="Paste the item description, quantity and unit, and any notes. Several items can be pasted together."></textarea>
+<div class="row"><button class="p" id="go">Break it down</button><button id="s1">Example: coupling</button><button id="s2">Example: medical + furniture</button><button id="s3">Example: valve</button><button id="s4">Example: safety + telecom</button><button id="clr">Clear</button></div></div>
+<datalist id="uoms"><option value="EA"><option value="PCS"><option value="M"><option value="MM"><option value="CM"><option value="LTR"><option value="KG"><option value="PAC"><option value="SET"><option value="ROLL"><option value="BOX"><option value="PAIR"><option value="LOT"></datalist>
 <div id="out" hidden>
+<div class="card" id="itc" hidden><h2>Items found</h2><div id="items"></div><div class="row"><button id="tsv">Copy summary table</button><button id="allr">RFQ for all items</button><span id="tss" class="s"></span></div></div>
 <div class="card"><h2>2. Check the breakdown</h2><p class="s">Green = read from a labelled line, amber = guessed, purple = edited by you. Edit any field and the searches update.</p><div class="grid" id="fields"></div></div>
 <div class="card" id="unc" hidden><h2>Could not place these</h2><p class="s">Pick the field each belongs to, or ignore it.</p><div id="unl"></div></div>
 <div class="card"><h2>3. Things to confirm with the requester</h2><div id="warn"></div></div>
@@ -43,115 +49,224 @@ label{font-size:12px;color:var(--mut);display:flex;justify-content:space-between
 <div class="card"><h2>5. RFQ draft</h2><textarea id="rfq" style="min-height:260px"></textarea><div class="row"><button id="cp">Copy RFQ</button><span id="cps" class="s"></span></div></div>
 </div>
 <script>
-var FIELDS=[['itemName','Item title'],['itemClass','Item class'],['qty','Quantity'],['unit','Unit'],['manufacturer','Manufacturer / brand'],['partNo','Part number'],['type','Type'],['size','Size / diameter'],['rating','Pressure / rating'],['connection','Connection'],['standards','Standards / flanges'],['materials','Materials'],['operation','Operation / actuator'],['color','Colour'],['structure','Structure'],['application','Used on / application'],['notes','Other notes']];
-var EX1="ITEM DESCRIPTION QTY UNIT\nWIRE:PULL RED PVC DAVIS DERBY 41 032 003   4.000 EA\n\nWIRE: MANUFACTURER: DAVIS DERBY, PART NO: 41 032 003; TYPE: PULL WIRE; DIAMETER: 5 MM; MATERIAL: STEEL; STRUCTURE: 3/16\"; COLOR:; ADDITIONAL INFORMATION: WITH RED PVC COVERING; USED ON: CONVEYOR BELTS";
-var EX2="ITEM DESCRIPTION QTY UNIT\nVALVE BTRFL:WFR ACTR 8IN HUK   1.000 EA\nDA2014WG16\n\nVALVE, BUTTERFLY: PART NO: DA 2014WG 16; TYPE: WAFER; VALVE SIZE: 8 IN; DESIGN RATING: PN16; CONNECTION TYPE: LUG; CONNECTION SIZE: TO SUIT FLANGES: PN6; PN10; PN16; ANSI150; BS10 TABLE E; BODY MATERIAL: CAST IRON; OPERATED: DOUBLE ACTING PRISMA PNEUMATIC ACTUATOR; LINING MATERIAL: CI/SS/SILICONE; BRAND: HUK";
-var S={f:{},src:{},un:[],blank:[],raw:''};
+/*PURE_START*/
+var FIELDS=[['itemName','Item title'],['itemClass','Item class'],['qty','Quantity'],['unit','Unit'],['manufacturer','Manufacturer'],['brand','Brand'],['partNo','Part number'],['model','Model number'],['type','Type'],['size','Size / diameter'],['dimensions','Dimensions'],['rating','Pressure / rating'],['performance','Performance (torque, speed…)'],['connection','Connection'],['standards','Standards / flanges'],['materials','Materials'],['operation','Operation / actuator'],['color','Colour'],['structure','Structure'],['contents','Contents / features / pack'],['application','Used on / application'],['notes','Description / notes'],['extra','Other specifications']];
+var MULTI={materials:1,dimensions:1,performance:1,contents:1,notes:1,extra:1,standards:1};
+var KEY=/^([A-Za-z][A-Za-z \/\-.&]{1,50}?)\s*:\s*(.*)$/,DASH=/^([A-Za-z][A-Za-z ]{1,25}?)\s+[-\u2013\u2014]\s+(.+)$/;
+var STOP={TO:1,OF:1,FOR:1,AND:1,THE:1,ON:1,IN:1,WITH:1,SUIT:1,A:1};
+var PLAIN=/^(dimensions?|contents?|features?|special features|consisting of|includes?|furnished items?|detailed description|description|additional information|remarks?|notes?|materials?|material type|size|valve size|diameter|size range|nominal size|type|standards?)$/i;
+var S;
+function mapKey(k){var s=k.toLowerCase().trim(),t=function(r){return r.test(s)};
+ if(t(/manufactur|^mfr|^make$|^supplier|^oem|^maker/))return'manufacturer';
+ if(t(/^brand/))return'brand';
+ if(t(/part\s*(no|num|id|code)|^p\/?n$|catalog|article|type no|^ref|item code|^code$|^sku/))return'partNo';
+ if(t(/model/))return'model';
+ if(t(/flange|drill|^standards?\b|certif|complian/))return'standards';
+ if(t(/connection|^end$|thread|^port\b/))return'connection';
+ if(t(/rating|^pn$|^ip$|class|pressure/))return'rating';
+ if(t(/material|lining|seat|seal|^disc|body/))return'materials';
+ if(t(/dimension|inside|outside|bore|thick|width|height|depth|length|overall|weight|\bod\b|\bid\b|\bwd\b|\blg\b/))return'dimensions';
+ if(t(/size|dia(meter)?$|nominal|^dn$/))return'size';
+ if(t(/torque|speed|rpm|power|capacity|voltage|current|flow|temperature|frequency|efficiency|load|force|supply|output|input|range|response|accuracy/))return'performance';
+ if(t(/operat|actuat|drive|control/))return'operation';
+ if(t(/colou?r/))return'color';
+ if(t(/structure|construction|strand/))return'structure';
+ if(t(/content|feature|consist|includ|furnished|accessor|component|pack|quantity|qty|count/))return'contents';
+ if(t(/used|applic|usage|suitable|compatible/))return'application';
+ if(t(/additional|remark|note|info|comment|descript|detail/))return'notes';
+ if(t(/type$|^type|style/))return'type';
+ return null}
+function isList(k){return/content|feature|consist|includ|descript|detail|accessor|component|furnished|specification/i.test(k)}
+function splitNested(n){var w=n.trim().split(/\s+/),L=w.length,key=n,lead='';
+ if(L>=2&&!STOP[w[L-2].toUpperCase()]&&mapKey(w[L-2]+' '+w[L-1])){key=w.slice(L-2).join(' ');lead=w.slice(0,L-2).join(' ')}
+ else if(mapKey(w[L-1])){key=w[L-1];lead=w.slice(0,L-1).join(' ')}
+ return{lead:lead,key:key}}
+function add(n,v,src){v=(v||'').trim();if(!v)return;
+ if(S.f[n]){if(S.f[n].toLowerCase().indexOf(v.toLowerCase())<0)S.f[n]+=(MULTI[n]&&n!=='standards'?'\n':n==='application'?'; ':', ')+v}else{S.f[n]=v;S.src[n]=src}}
+function fmt(f,k,v){
+ if(f==='materials'){var lb=k.replace(/materials?|type/ig,'').trim();return lb?lb+': '+v:v}
+ if(f==='standards'){var pf=k.replace(/flanges?|standards?|drilling/ig,'').trim();return pf?pf+': '+v:v}
+ if(MULTI[f]||f==='size')return PLAIN.test(k.trim())?v:k+': '+v;
+ return v}
+function guess(c){c=c.trim().replace(/[,;]+$/,'');if(!c)return;
+ if(c.length<3){S.un.push(c);return}
+ if(c.length<40&&/\b(PN|DN|ANSI|BS|DIN|ISO|ASTM|API|JIS|IEC|NEMA)\s?-?\d/i.test(c)){add('standards',c,'guessed');return}
+ if(/^[\d.,\/]+\s?(mm|cm|m|in|inch|")?\s*[x×*]\s*[\d.,]+/i.test(c)){add('dimensions',c,'guessed');return}
+ if(c.length<=45&&/steel|iron|brass|bronze|ptfe|rubber|nbr|epdm|silicone|pvc|alumin|copper|nylon|viton|stainless|plastic|wood|bamboo|leather|cotton|paper|foam/i.test(c)){add('materials',c,'guessed');return}
+ add('contents',c,'guessed')}
+var UA='EA|PAC|PAK|PCS|PC|NOS|SETS?|PKT|CTN|PAIR|PR|ROLLS?|MTRS?|M|MM|CM|LTR|L|KG|G|LOT|DOZ|BAG|DRUM|REAM|BTL|CAN|TIN|PKG|BOX|FT|YD',US='EA|PAC|PAK|PCS|NOS|SETS?|PKT|CTN|PAIR|PR';
+function qtyMatch(l){var m,ok=function(m){var pre=l.replace(m[0],'').trim();return pre.length>=4&&!/:$/.test(pre)};
+ m=l.match(/(\d+\.\d{3})\s+([A-Za-z]{1,5})\s*$/);if(m&&ok(m))return m;
+ m=l.match(new RegExp('(?:\\s{2,}|\\t)(\\d+(?:[.,]\\d+)?)\\s+('+UA+')\\s*$','i'));if(m&&ok(m))return m;
+ m=l.match(new RegExp('\\s(\\d+(?:[.,]\\d+)?)\\s+('+US+')\\s*$','i'));if(m&&ok(m))return m;
+ m=l.match(/\s(\d+\.\d{3})\s*$/);return m&&ok(m)?m:null}
+function startsKey(l){return KEY.test(l)||DASH.test(l)}
+function mergeLines(lines){lines=lines.map(function(l){return l.trim()}).filter(Boolean);
+ var kc=lines.filter(startsKey).length,keyed=lines.length>1&&kc/lines.length>=0.5,out=[];
+ lines.forEach(function(l){var p=out[out.length-1],dim=/^[\d.,]+\s?(mm|cm|m|in)?\s*[x×*]\s*[\d.,]/i.test(l);
+  if(p!==undefined&&!/[.;:!?]$/.test(p)&&!startsKey(l)&&!dim&&(keyed||/^[a-z(]/.test(l)||(p.length>=32&&!/\)$/.test(p))))out[out.length-1]=p+' '+l;else out.push(l)});
+ return out}
+function proc(p,st){var rest=p,m,done=false;
+ while((m=rest.match(KEY))){var k=m[1].trim(),v=m[2],mm=v.match(KEY);
+  if(mm&&!mapKey(k)){st.labels.push(k);rest=v;continue}
+  if(mm){var sp=splitNested(mm[1]);if(mapKey(sp.key)){var skip=!sp.lead&&(/^(notes|contents)$/.test(mapKey(k))||sp.key.toUpperCase().split(' ').pop()===k.toUpperCase().split(' ').pop());if(!skip){st.cur={k:k,v:sp.lead};st.items.push(st.cur)}rest=sp.key+': '+mm[2];continue}}
+  st.cur={k:k,v:v.trim()};st.items.push(st.cur);if(!st.cur.v&&st.line&&isList(k))st.swallow=st.cur;done=true;break}
+ if(done)return;
+ var d=st.line&&rest.match(DASH);
+ if(d&&(mapKey(d[1])||d[1].trim().split(/\s+/).length<=3)){st.cur={k:d[1].trim(),v:d[2].trim()};st.items.push(st.cur);return}
+ var u=rest.match(/^(used on|used for|for use (?:on|with)|suitable for|compatible with|can be used (?:on|for|with|in))\s+(.*)$/i);
+ if(u){st.cur={k:'USED ON',v:u[2]};st.items.push(st.cur);return}
+ if(st.items.length&&/^(c\/w|complete with|comes with|supplied with)\b/i.test(rest)){st.feat.push(rest);return}
+ if(st.cur&&st.cur.v===''&&!st.cur.closed){st.cur.closed=1;st.cur.v=rest;return}
+ if(!st.items.length){st.lead.push(rest);return}
+ if((st.semi||st.cont)&&st.cur){var f0=mapKey(st.cur.k);st.cur.v+=(st.cur.v?(st.seg&&(!f0||/^(contents|notes|application)$/.test(f0))?'; ':', '):'')+rest;return}
+ st.feat.push(rest)}
+function feed(text,st){var n=0;text.split(';').forEach(function(seg){seg=seg.trim();if(!seg)return;
+ seg.split(/,\s*(?=[A-Za-z][A-Za-z \/\-.&]{1,50}\s*:)/).forEach(function(p,ix){p=p.trim();if(p){st.cont=n>0;st.seg=ix===0;proc(p,st);n++}})});st.cont=false}
+function prefixBlock(b,strict){if(b.length!==1)return false;var l=b[0].trim();if(/[:;]/.test(l))return false;
+ if(/^[^\s,;:]{2,25}\s*,\s*[A-Z0-9][A-Z0-9\-\/]{4,}$/.test(l))return true;
+ return!strict&&/^[A-Z0-9][A-Z0-9&.\-]{1,13}$/.test(l)}
+function norm(x){return x.toUpperCase().replace(/[^A-Z0-9]/g,'')}
+function isEcho(bl,it){if(!it||bl.length>3)return false;var t=norm(it.head.map(function(l){var m=qtyMatch(l);return m?l.replace(m[0],''):l}).join(' ')+' '+it.body.map(function(b){return b.join(' ')}).join(' '));
+ return bl.every(function(l){var n=norm(l);return!/[:;]/.test(l)&&n.length>=5&&t.indexOf(n)>=0})}
+function splitItems(raw){
+ var lines=raw.replace(/\r/g,'').split('\n').filter(function(l){return!/^\s*ITEM\s+DESCRIPTION\b/i.test(l)&&!/^\s*QTY\s+UNIT\s*$/i.test(l)});
+ var blocks=[],b=[];lines.forEach(function(l){if(l.trim()===''){if(b.length)blocks.push(b);b=[]}else b.push(l)});if(b.length)blocks.push(b);
+ if(!blocks.length)return[];
+ var isHead=function(bl){return bl.some(function(l){return qtyMatch(l)})};
+ if(!blocks.some(isHead)){var f=blocks[0];return[{head:[f[0]],body:[f.slice(1)].concat(blocks.slice(1)).filter(function(x){return x.length})}]}
+ var items=[],cur=null,pend=[];
+ blocks.forEach(function(bl){
+  if(isHead(bl)){var h=bl.slice();
+   if(pend.length){var pf=pend.pop();h=pf.concat(h);if(cur)pend.forEach(function(x){cur.body.push(x)})}
+   pend=[];cur={head:h,body:[]};items.push(cur)}
+  else if(!cur){pend.push(bl)}
+  else if(isEcho(bl,cur)){cur.echo=bl}
+  else if(prefixBlock(bl,false)){pend.push(bl)}
+  else{pend.forEach(function(x){cur.body.push(x)});pend=[];cur.body.push(bl)}});
+ pend.forEach(function(x){if(cur&&isEcho(x,cur))return;if(prefixBlock(x,true))items.push({head:x,body:[],orphan:true});else if(cur)cur.body.push(x)});
+ return items}
+function parseItem(it){
+ S={f:{},src:{},un:[],blank:[],raw:'',orphan:!!it.orphan,hasBody:it.body.length>0};
+ var hl=it.head.slice(),qm=null;
+ for(var i=0;i<hl.length;i++){qm=qtyMatch(hl[i]);if(qm){hl[i]=hl[i].replace(qm[0],'');break}}
+ if(qm){add('qty',String(parseFloat(qm[1].replace(',','.'))),'matched');add('unit',qm[2]?qm[2].toUpperCase():'','matched')}
+ var head=hl.join(' ').replace(/\s+/g,' ').trim();if(head)add('itemName',head,'matched');
+ S.raw=[it.head.join('\n')].concat(it.body.map(function(b){return b.join('\n')})).join('\n\n');
+ var flat=it.body.map(function(b){return b.join(' ')}).join(' ').replace(/\s+/g,' ');
+ var semis=(flat.match(/;/g)||[]).length;
+ var st={cur:null,items:[],lead:[],labels:[],feat:[],swallow:null,semi:semis>=2,line:semis<2};
+ if(st.semi)feed(flat,st);
+ else it.body.forEach(function(b){mergeLines(b).forEach(function(l){if(st.swallow){st.swallow.v+=(st.swallow.v?'; ':'')+l;return}feed(l,st)});st.swallow=null});
+ st.items=st.items.filter(function(x){if(!x.v&&!mapKey(x.k)){st.labels.push(x.k);return false}return true});
+ var lead=st.lead;
+ var cls=lead.concat(st.labels).join(' ').replace(/\s+/g,' ').trim();
+ if(cls&&cls.toLowerCase()!==head.toLowerCase())add('itemClass',cls,'matched');
+ st.items.forEach(function(x){if(!x.v){S.blank.push(x.k);return}var f=mapKey(x.k);
+  if(!f)add('extra',x.k+': '+x.v,'matched');else add(f,fmt(f,x.k,x.v),'matched')});
+ st.feat.forEach(guess);
+ if(!S.f.manufacturer&&it.head.length>1&&!qtyMatch(it.head[0])&&/^[A-Z0-9][A-Za-z0-9&.\-]{1,13}$/.test(it.head[0].trim()))add('manufacturer',it.head[0].trim(),'guessed');
+ var ct=head.split(/[\s,;:]+/).filter(function(t){return/^(?=[A-Z0-9\-\/]*\d)[A-Z0-9][A-Z0-9\-\/]{5,}$/.test(t)&&!/^\d+(\.\d+)?[A-Z]{1,5}$/.test(t)});
+ var allV=norm(Object.keys(S.f).filter(function(k){return k!=='itemName'}).map(function(k){return S.f[k]}).join(' '));
+ if(!S.f.partNo&&ct.length){var c0=ct.shift();add('partNo',c0,'guessed');
+  if(!S.f.manufacturer){var mr=head.match(new RegExp('([A-Za-z][A-Za-z&.\\- ]{1,24}?)\\s*[,;:]\\s*'+c0.replace(/[-\/]/g,'\\$&')));if(mr&&!/\d/.test(mr[1]))add('manufacturer',mr[1].trim(),'guessed')}}
+ var pn=norm(S.f.partNo||'');
+ ct.forEach(function(t){var n=norm(t);if(allV.indexOf(n)>=0||(pn&&(pn.indexOf(n)>=0||n.indexOf(pn)>=0)))return;add('extra','Other code in title: '+t,'guessed')});
+ var all=(head+' '+flat).replace(/\s+/g,' ');
+ if(!S.f.size){var sm=all.match(/\bDN\s?\d+\b/i);if(sm)add('size',sm[0],'guessed')}
+ if(!S.f.rating){var rm=all.match(/\bPN\s?\d+\b|\bclass\s?\d+\b/i);if(rm)add('rating',rm[0],'guessed')}
+ if(!S.f.size&&!S.f.dimensions){var dm=head.match(/\b\d+(?:\.\d+)?\s?(?:m|meters?|metres?|mm|cm)\b/i);if(dm)add('dimensions',dm[0],'guessed')}
+ return S}
+function parseAll(raw){return splitItems(raw).map(parseItem)}
+/*PURE_END*/
+var ITEMS=[],SEL=0;
+var UOM={EA:'each',PCS:'pieces',PC:'pieces',NOS:'pieces',PAC:'pack',PAK:'pack',PKT:'packet',PKG:'package',SET:'set',SETS:'set',PR:'pair',PAIR:'pair',ROLL:'roll',ROLLS:'roll',BOX:'box',CTN:'carton',LOT:'lot',M:'metres',MTR:'metres',MTRS:'metres',MM:'millimetres',CM:'centimetres',LTR:'litres',L:'litres',KG:'kilograms',G:'grams',DOZ:'dozen',BAG:'bag',DRUM:'drum',REAM:'ream',BTL:'bottle',CAN:'can',TIN:'tin',FT:'feet',YD:'yards'};
+var UR=[[/\b(gloves?|boots?|shoes?|socks?)\b/i,'pairs (PR)'],[/\b(wire|cable|rope|hose|pipe|tubing|chain|conduit|trunking|webbing|sling|belting|fabric|cloth)\b/i,'by the metre (M), or per coil, reel or drum'],[/\btape\b/i,'per roll (ROLL) or per metre (M)'],[/\b(oil|grease|paint|thinner|solvent|coolant|lubricant|chemical|fuel|diesel|resin|glue)\b/i,'by the litre (LTR) or kilogram (KG), or per drum or can'],[/\b(bolts?|nuts?|washers?|screws?|rivets?|nails?|gaskets?|o-?rings?|fuses?|bulbs?|sleeves?|ties|clips?|wipes|plugs?|rings?|discs?)\b/i,'pieces (PCS), or per pack or box (PAC/BOX) with the pack size stated'],[/\b(kits?|set)\b/i,'per SET, with the contents of the set stated']];
+function uomHint(it){var t=[H(it,'itemName'),H(it,'itemClass'),H(it,'type')].join(' ');for(var i=0;i<UR.length;i++)if(UR[i][0].test(t))return UR[i][1];return''}
+function lenHint(it){var m=(H(it,'itemName')+' '+H(it,'dimensions')+' '+H(it,'size')).match(/\b\d+(?:\.\d+)?\s?(?:m|meters?|metres?)\b/i);return m?m[0]:''}
 function $(i){return document.getElementById(i)}
 function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
-function mapKey(k){var s=k.toLowerCase();
- if(/manufactur|^brand|^make$|^mfr|^supplier|^oem/.test(s))return'manufacturer';
- if(/part\s*(no|num)|^p\/?n$|model|catalog|article|type no|^ref/.test(s))return'partNo';
- if(/flange|drill|standard/.test(s))return'standards';
- if(/connection|^end|thread/.test(s))return'connection';
- if(/rating|pressure|^pn$|class/.test(s))return'rating';
- if(/material|lining|seat|seal|disc|body/.test(s))return'materials';
- if(/operat|actuat|drive|power|control/.test(s))return'operation';
- if(/colou?r/.test(s))return'color';
- if(/structure|construction|strand/.test(s))return'structure';
- if(/used|applic|usage/.test(s))return'application';
- if(/additional|remark|note|info|comment/.test(s))return'notes';
- if(/size|diameter|dia$|length|width|thick|dn|nominal/.test(s))return'size';
- if(/^type|style/.test(s))return'type';
- return null}
-function add(n,v,src){v=(v||'').trim();if(!v)return;
- if(S.f[n]){if(S.f[n].toLowerCase().indexOf(v.toLowerCase())<0)S.f[n]+=(n==='materials'?'\n':', ')+v}else{S.f[n]=v;S.src[n]=src}}
-function guess(chunk){var c=chunk.trim();if(!c)return;
- if(/\b(PN|DN|ANSI|BS|DIN|ISO|ASTM|API|JIS)\s?\d/i.test(c)){add(/^PN\s?\d+$/i.test(c)?'rating':'standards',c,'guessed');return}
- if(/steel|iron|brass|bronze|ptfe|rubber|nbr|epdm|silicone|pvc|alumin|copper|nylon|viton|stainless|plastic/i.test(c)){add('materials',c,'guessed');return}
- if(/\b\d+(\.\d+)?\s?(mm|cm|in|inch|"|m)\b/i.test(c)){add('size',c,'guessed');return}
- S.un.push(c)}
-var KEY=/^([A-Za-z][A-Za-z \/\-.]{1,30}?):\s*(.*)$/;
-function parse(raw){
- S={f:{},src:{},un:[],blank:[],raw:raw};
- var t=raw.replace(/\r/g,'').replace(/^\s*ITEM DESCRIPTION.*$/im,'').trim();if(!t)return;
- var blocks=t.split(/\n\s*\n/).map(function(b){return b.trim()}).filter(Boolean);
- var head=blocks[0],body=blocks.slice(1).join(' ');
- if(blocks.length===1){var ls=t.split('\n');head=ls[0];body=ls.slice(1).join(' ')}
- head=head.replace(/\s+/g,' ');
- var qm=head.match(/(\d+(?:[.,]\d+)?)\s*(EA|PCS|PC|NOS|SETS?|MTR|M|KG|LOT|ROLL|BOX|L)\b/i);
- if(!qm){var q2=raw.match(/(\d+(?:[.,]\d+)?)\s*(EA|PCS|PC|NOS|SETS?|MTR|M|KG|LOT|ROLL|BOX)\b/i);qm=q2}
- if(qm){add('qty',String(parseFloat(qm[1].replace(',','.'))),'matched');add('unit',qm[2].toUpperCase(),'matched');head=head.replace(qm[0],'')}
- head=head.replace(/\s+/g,' ').trim();
- if(!body){body=head}else add('itemName',head,'matched');
- var segs=body.replace(/\s+/g,' ').split(';').map(function(s){return s.trim()}).filter(Boolean),pieces=[];
- segs.forEach(function(s){s.split(/,\s*(?=[A-Za-z][A-Za-z \/\-.]{1,30}:)/).forEach(function(p){pieces.push(p.trim())})});
- var items=[],lead=[],labels=[],cur=null;
- pieces.forEach(function(p){var rest=p,m,done=false;
-  while((m=rest.match(KEY))){var k=m[1].trim(),v=m[2];
-   if(KEY.test(v)&&!mapKey(k)){labels.push(k);rest=v;continue}
-   if(KEY.test(v)){cur={k:k,v:''};items.push(cur);rest=v;continue}
-   cur={k:k,v:v.trim()};items.push(cur);done=true;break}
-  if(!done){if(cur)cur.v+=(cur.v?', ':'')+rest;else lead.push(rest)}});
- if(!items.length){pieces.forEach(guess)}
- else{
-  var cls=lead.concat(labels).join(' ').trim();if(cls)add('itemClass',cls,'matched');
-  items.forEach(function(it){
-   if(!it.v){S.blank.push(it.k);return}
-   var f=mapKey(it.k);
-   if(!f){S.un.push(it.k+': '+it.v);return}
-   var v=it.v;
-   if(f==='materials'){var lb=it.k.replace(/material/i,'').trim();v=lb?lb+': '+v:v}
-   if(f==='standards'){var pf=it.k.replace(/flanges?|standards?|drilling/i,'').trim();v=pf?pf+': '+v:v}
-   add(f,v,'matched')})}
- var all=raw.replace(/\s+/g,' ');
- if(!S.f.partNo){var pm=all.match(/\b[A-Z]{1,4}\s?\d{3,}[A-Z0-9]*(?:\s?\d{2,})?\b/);if(pm&&!/^(PN|DN|BS|ANSI)/.test(pm[0]))add('partNo',pm[0],'guessed')}
- if(!S.f.size){var sm=all.match(/\bDN\s?\d+\b|\b\d+(\.\d+)?\s?(mm|in|inch|")\b/i);if(sm)add('size',sm[0],'guessed')}
- if(!S.f.rating){var rm=all.match(/\bPN\s?\d+\b|\bclass\s?\d+\b/i);if(rm)add('rating',rm[0],'guessed')}
-}
-function render(){
- $('out').hidden=false;
- $('fields').innerHTML=FIELDS.map(function(F){var n=F[0],v=S.f[n]||'',s=S.src[n]||'';
-  var tag=v&&s?'<span class="b '+s+'">'+s+'</span>':'';
-  var el=(n==='materials'||n==='notes'||n==='standards')?'<textarea data-f="'+n+'" style="min-height:60px">'+esc(v)+'</textarea>':'<input data-f="'+n+'" value="'+esc(v)+'">';
-  return'<div><label>'+F[1]+tag+'</label>'+el+'</div>'}).join('');
+function H(it,n){return(it.f[n]||'').trim()}
+function warns(it){var w=[],h=function(n){return H(it,n)},txt=it.raw+' '+Object.keys(it.f).map(function(k){return it.f[k]}).join(' ');
+ if(it.orphan)w.push('This line looks like the start of another item, but its quantity line was not pasted. Paste the full item if you need it included.');
+ if(!h('partNo'))w.push('No part number found. Searches will rely on the functional description, so matches will be equivalents, not exact.');
+ else if(it.src.partNo==='guessed')w.push('The part number ('+h('partNo')+') was guessed from the title. Confirm it is really a part number.');
+ else if(/\s/.test(h('partNo')))w.push('The part number contains spaces. Both the spaced and joined forms are searched, since suppliers list it either way.');
+ if(!h('manufacturer')&&!h('brand'))w.push('No manufacturer or brand found. Ask whether any brand is acceptable or an equivalent is fine.');
+ if(h('manufacturer')&&h('brand')&&h('manufacturer').toLowerCase()!==h('brand').toLowerCase())w.push('Manufacturer ('+h('manufacturer')+') and brand ('+h('brand')+') differ. Confirm which one to quote against.');
+ if(!h('qty'))w.push('No quantity found.');
+ var u=h('unit').toUpperCase();
+ if(h('qty')&&!u)w.push('No unit of measure was given. EA (each) is usually assumed, so confirm the real unit.');
+ if(h('qty')&&(u==='EA'||!u)){var uh=uomHint(it),lh=lenHint(it);
+  if(uh)w.push('The unit is EA (each), which requesters usually enter when the exact unit of measure is not known. For this item the likely selling unit is '+uh+'. Confirm it with the requester and state it on the RFQ.');
+  else if(lh)w.push('A length ('+lh+') appears in the spec. EA is right only if each piece is that long; otherwise confirm the total metres or the number of pieces.')}
+ if(!it.hasBody&&!it.orphan)w.push('Only a title was given, with no specification detail. Searches use the title text, so confirm the full requirements.');
+ if(/\blug\b/i.test(txt)&&/\bwafer\b/i.test(txt))w.push('The spec mentions both LUG and WAFER. These are different valve body styles, so confirm which one is needed.');
+ if(h('size')&&h('structure')&&/\d/.test(h('size'))&&/\d/.test(h('structure')))w.push('Both Size and Structure carry dimensions ("'+h('size')+'" and "'+h('structure')+'"). Confirm which is the overall diameter and which is the construction.');
+ if(/to suit/i.test(h('connection')+' '+h('standards')))w.push('The connection is given as "to suit". Confirm the actual flange or fitting standard so the right one is supplied.');
+ if(/#/.test(txt))w.push('The spec uses "#" between values (for example 61#71 cm). That is probably a range from–to, so confirm.');
+ if(it.blank.length)w.push('Left blank in the source: '+it.blank.join(', ')+'. Confirm if it matters.');
+ if(it.un.length)w.push(it.un.length+' detail(s) are still unplaced. Assign them above so they are included.');
+ return w}
+function queries(it){var h=function(n){return H(it,n)},q=[],mfr=h('manufacturer'),br=h('brand'),pn=h('partNo'),m1=mfr||br;
+ if(pn){var pj=pn.replace(/\s+/g,'');q.push(['Exact part number',(m1?m1+' ':'')+'"'+pn+'"']);if(pj!==pn)q.push(['Part number, joined form',(m1?m1+' ':'')+'"'+pj+'"']);
+  if(mfr&&br&&mfr.toLowerCase()!==br.toLowerCase())q.push(['Part number with brand',br+' "'+pj+'"']);
+  q.push(['Datasheet or catalogue',[m1,pj,'datasheet'].join(' ').trim()]);q.push(['Where to buy',[m1,pj,'buy price supplier export'].join(' ').trim()])}
+ if(h('model'))q.push(['Model number',[br||mfr,'"'+h('model')+'"'].join(' ').trim()]);
+ var fn=[h('itemClass')||h('itemName'),h('type'),br,h('size'),h('dimensions').split('\n')[0],h('rating'),h('materials').split('\n').slice(0,2).join(' '),h('operation')].join(' ').replace(/\s+/g,' ').trim().split(' ').slice(0,18).join(' ');
+ if(fn){q.push(['Equivalent by specification',fn]);if($('loc').checked)q.push(['Local supplier (Ghana)',fn+' supplier Accra Ghana'])}
+ return q}
+function rfqBlock(it,tag){var u=H(it,'unit').toUpperCase(),q=[H(it,'qty'),H(it,'unit')].join(' ').trim();if(UOM[u])q+=' ('+UOM[u]+')';
+ var L=[tag+'Item: '+(H(it,'itemName')||H(it,'itemClass')),'Quantity: '+q];
+ if((!u||u==='EA')&&H(it,'qty')){var uh=uomHint(it);if(uh)L.push('Unit note: EA was entered as a placeholder. Please quote in the unit you normally sell (likely '+uh+') and state the pack size or length.')}
+ FIELDS.forEach(function(F){var n=F[0];if(['itemName','qty','unit'].indexOf(n)>=0)return;var v=H(it,n);if(v)L.push(F[1]+': '+v.replace(/\n/g,'; '))});return L}
+var TAIL=['Please confirm: unit and total price, availability and lead time, country of origin, shipping terms to Accra, Ghana, quote validity, and any equivalent you can offer (with differences stated).','','Regards,','[Your name / company]'];
+function rfqOne(it){return['Subject: Request for quotation – '+(H(it,'itemName')||H(it,'itemClass')||'item'),'','Hello,','','Please quote for the following:',''].concat(rfqBlock(it,''),[''],TAIL).join('\n')}
+function rfqAll(){var L=['Subject: Request for quotation – '+ITEMS.length+' items','','Hello,','','Please quote for the following '+ITEMS.length+' items:',''];
+ ITEMS.forEach(function(it,i){L=L.concat(rfqBlock(it,'Item '+(i+1)+' – '),[''])});return L.concat(TAIL).join('\n')}
+function cp(t,el){var ok=false;try{if(navigator.clipboard){navigator.clipboard.writeText(t);ok=true}}catch(e){}
+ if(!ok){var a=document.createElement('textarea');a.value=t;document.body.appendChild(a);a.select();try{ok=document.execCommand('copy')}catch(e){}a.remove()}
+ el.textContent=ok?'Copied.':'Copy failed. Select the text and copy it manually.'}
+function pick(i){SEL=i;S=ITEMS[i];render()}
+function renderItems(){$('itc').hidden=ITEMS.length<2;
+ $('items').innerHTML=ITEMS.map(function(it,i){var n=warns(it).length;return'<button class="it'+(i===SEL?' on':'')+'" data-i="'+i+'">#'+(i+1)+' · '+esc((H(it,'itemName')||'(untitled)').slice(0,60))+' · '+esc([H(it,'qty'),H(it,'unit')].join(' ').trim())+(H(it,'partNo')?' · '+esc(H(it,'partNo')):'')+(n?' · ⚠ '+n:'')+'</button>'}).join('');
+ $('items').querySelectorAll('button').forEach(function(b){b.onclick=function(){pick(+b.getAttribute('data-i'))}})}
+function render(){$('out').hidden=false;
+ $('fields').innerHTML=FIELDS.map(function(F){var n=F[0],v=S.f[n]||'',s=S.src[n]||'',tag=v&&s?'<span class="b '+s+'">'+s+'</span>':'';
+  var el=MULTI[n]?'<textarea data-f="'+n+'" style="min-height:64px">'+esc(v)+'</textarea>':'<input data-f="'+n+'"'+(n==='unit'?' list="uoms"':'')+' value="'+esc(v)+'">';
+  var nm=n==='unit'&&UOM[v.toUpperCase()]?' ('+UOM[v.toUpperCase()]+')':'';
+  return'<div><label>'+F[1]+nm+tag+'</label>'+el+'</div>'}).join('');
  $('fields').querySelectorAll('[data-f]').forEach(function(e){e.oninput=function(){var n=e.getAttribute('data-f');S.f[n]=e.value;S.src[n]='manual';refresh()}});
  $('unc').hidden=!S.un.length;
  $('unl').innerHTML=S.un.map(function(u,i){return'<div class="un"><span>'+esc(u)+'</span><select data-u="'+i+'"><option value="">Assign to…</option>'+FIELDS.map(function(F){return'<option value="'+F[0]+'">'+F[1]+'</option>'}).join('')+'<option value="_x">Ignore</option></select></div>'}).join('');
- $('unl').querySelectorAll('select').forEach(function(sel){sel.onchange=function(){var i=+sel.getAttribute('data-u'),v=sel.value;if(!v)return;var txt=S.un[i];if(v!=='_x')add(v,txt,'manual');S.un.splice(i,1);if(v!=='_x')S.src[v]=S.src[v]==='matched'?'matched':'manual';render();refresh()}});
+ $('unl').querySelectorAll('select').forEach(function(sel){sel.onchange=function(){var i=+sel.getAttribute('data-u'),v=sel.value;if(!v)return;var t=S.un[i];if(v!=='_x')add(v,t,'manual');S.un.splice(i,1);render()}});
  refresh()}
-function g(n){return(S.f[n]||'').trim()}
-function refresh(){
- var w=[],txt=(S.raw+' '+Object.keys(S.f).map(function(k){return S.f[k]}).join(' '));
- if(!g('partNo'))w.push('No part number found. Searches will rely on the functional description, so matches will be equivalents, not exact.');
- else if(/\s/.test(g('partNo')))w.push('The part number contains spaces. Both the spaced and joined forms are searched, since suppliers list it either way.');
- if(!g('manufacturer'))w.push('No manufacturer or brand found. Ask the requester whether an equivalent brand is acceptable.');
- if(!g('qty'))w.push('No quantity found.');
- if(g('unit').toUpperCase()==='EA'&&/wire|cable|rope|hose|pipe|chain|belt|tube|cord/i.test(g('itemClass')+' '+g('itemName')+' '+g('type')))w.push('The unit is EA, but this kind of item is usually sold by length. Confirm whether the quantity means pieces, metres or coils, and the length of each.');
- if(/\blug\b/i.test(txt)&&/\bwafer\b/i.test(txt))w.push('The spec mentions both LUG and WAFER. These are different valve body styles, so confirm which one is needed.');
- if(g('size')&&g('structure')&&/\d/.test(g('size'))&&/\d/.test(g('structure')))w.push('Both Size and Structure carry dimensions ("'+g('size')+'" and "'+g('structure')+'"). Confirm which is the overall diameter and which is the core or construction.');
- if(/to suit/i.test(g('standards')))w.push('The flange standard is given as "to suit" a list. Confirm the actual pipework flange (PN or ANSI) so the right drilling is supplied.');
- if(S.blank.length)w.push('Left blank in the source: '+S.blank.join(', ')+'. Confirm if it matters.');
- if(S.un.length)w.push(S.un.length+' detail(s) are still unplaced. Assign them above so they are included in searches and the RFQ.');
+function refresh(){var w=warns(S);
  $('warn').innerHTML=w.length?w.map(function(x){return'<div class="w">'+esc(x)+'</div>'}).join(''):'<p class="s">Nothing obvious to flag.</p>';
- var mfr=g('manufacturer'),pn=g('partNo'),qs=[];
- if(pn){var pj=pn.replace(/\s+/g,'');qs.push(['Exact part number',(mfr?mfr+' ':'')+'"'+pn+'"']);if(pj!==pn)qs.push(['Part number, joined form',(mfr?mfr+' ':'')+'"'+pj+'"']);
-  qs.push(['Datasheet or catalogue',[mfr,pj,'datasheet'].join(' ').trim()]);qs.push(['Where to buy',[mfr,pj,'buy price supplier export'].join(' ').trim()])}
- var mats=g('materials').split('\n').slice(0,3).join(' ');
- var fn=[g('itemClass'),g('type'),g('size'),g('rating'),mats,g('operation'),g('color')].join(' ').replace(/\s+/g,' ').trim();
- if(fn){qs.push(['Equivalent by specification',fn]);if($('loc').checked)qs.push(['Local supplier (Ghana)',fn+' supplier Accra Ghana'])}
+ var qs=queries(S);
  $('qs').innerHTML=qs.length?qs.map(function(q){var e=encodeURIComponent(q[1]);
   return'<div class="q"><strong>'+esc(q[0])+'</strong><code>'+esc(q[1])+'</code><a target="_blank" rel="noopener" href="https://www.google.com/search?q='+e+'">Google</a><a target="_blank" rel="noopener" href="https://www.bing.com/search?q='+e+'">Bing</a><a target="_blank" rel="noopener" href="https://www.alibaba.com/trade/search?SearchText='+e+'">Alibaba</a><a target="_blank" rel="noopener" href="https://www.google.com/search?tbm=shop&q='+e+'">Shopping</a></div>'}).join(''):'<p class="s">Add some details to generate searches.</p>';
- var L=['Subject: Request for quotation – '+(g('itemName')||g('itemClass')||'item'),'','Hello,','','Please quote for the following:','','Item: '+(g('itemName')||g('itemClass')),'Quantity: '+[g('qty'),g('unit')].join(' ').trim()];
- FIELDS.forEach(function(F){var n=F[0];if(['itemName','qty','unit'].indexOf(n)>=0)return;var v=g(n);if(v)L.push(F[1]+': '+v.replace(/\n/g,'; '))});
- L.push('','Please confirm: unit and total price, availability and lead time, country of origin, shipping terms to Accra, Ghana, quote validity, and any equivalent you can offer (with differences stated).','','Regards,','[Your name / company]');
- $('rfq').value=L.join('\n')}
-$('go').onclick=function(){var r=$('raw').value;if(!r.trim())return;parse(r);render()};
-$('s1').onclick=function(){$('raw').value=EX1;parse(EX1);render()};
-$('s2').onclick=function(){$('raw').value=EX2;parse(EX2);render()};
-$('clr').onclick=function(){$('raw').value='';$('out').hidden=true;S={f:{},src:{},un:[],blank:[],raw:''}};
-$('loc').onchange=refresh;
-$('cp').onclick=function(){var t=$('rfq');t.select();var ok=false;try{ok=document.execCommand('copy')}catch(e){}
- try{if(navigator.clipboard){navigator.clipboard.writeText(t.value);ok=true}}catch(e){}
- $('cps').textContent=ok?'Copied.':'Select the text and copy it manually.'};
-</script></main></body></html>
+ $('rfq').value=rfqOne(S);renderItems()}
+function run(r){if(!r.trim())return;ITEMS=parseAll(r);if(!ITEMS.length)return;SEL=0;S=ITEMS[0];render();
+ try{localStorage.setItem('ss_raw',r)}catch(e){}}
+var X1="ITEM DESCRIPTION QTY UNIT\nSPIDER,\nCOUPLING:TIMKEN;68514412275   1.000 EA\n\nSPIDER, COUPLING: MANUFACTURER: TIMKEN, PART NO: 68514412275; COUPLING TYPE: SW190; MATERIAL: NBR; INSIDE DIAMETER: 57.15 MM; APPLICATION: SNAP WRAP; THICKNESS: 22.35 MM; OUTSIDE DIAMETER: 131.57 MM; BRAND: LOVEJOY\n\nTIMKEN,68514412275\nCOUPLING SHAFT   2.000 EA\nFLEXIBLE:RRS190;PE;SPACER\n\nCOUPLING, SHAFT FLEXIBLE: TYPE: RRS SPACER, \"SNAP WRAP\"; BORE DIAMETER: 60 MM; TORQUE: 285 NM; MATERIAL: LOW CARBON STEEL SHEET(CRCA); SPEED: 100 RPM; FURNISHED ITEMS: POLYURETHANE INSERT; COMMERCIAL SIZE: RRS190; DIMENSIONS: DIA 129 X LG 248 MM; BRAND: LOVEJOY";
+var X2="Examination Couch                  8.000   EA\n\nExamination couch\nBRAND:\nMATERIAL TYPE:Stainless steel, leather covered foam\n\nDETAILED DESCRIPTION:\nAdjustable head part\n\nTable with side lockers                9.000   EA\n\nOffice table\ncolour - coffee\nMaterial - Wooden\n140cm x 75cm x 75cm,\n\nComes with side locker\n\nMedical Instrument Cabinet            2.000   EA\n\nMedical Instrument Cabinet\nProduct Size - H1800*W850*D500mm\nGross Weight - 40KG\nMaterial - High quality plate, finish:\nPainted\nUsage - Hospital, clinic, drugstore,\nlaboratory etc\n\nDiagnostic set                   2.000   SET\n\nDiagnostic set\nFeatures:\nConsisting of Otoscope\n3 Speculae\nNasal Speculum\nBattery";
+var X3="ITEM DESCRIPTION QTY UNIT\nVALVE BTRFL:WFR ACTR 8IN HUK   1.000 EA\nDA2014WG16\n\nVALVE, BUTTERFLY: PART NO: DA 2014WG 16; TYPE: WAFER; VALVE SIZE: 8 IN; DESIGN RATING: PN16; CONNECTION TYPE: LUG; CONNECTION SIZE: TO SUIT FLANGES: PN6; PN10; PN16; ANSI150; BS10 TABLE E; BODY MATERIAL: CAST IRON; OPERATED: DOUBLE ACTING PRISMA PNEUMATIC ACTUATOR; LINING MATERIAL: CI/SS/SILICONE; BRAND: HUK";
+var X4="BUSHING:ID 32MM;REGAL\nREXNORD;SDSM32MM                  1.000   EA\n\nBUSHING: MANUFACTURER: REGAL REXNORD, PART NO: SDSM32MM; TYPE: SURE-GRIP, QUICK DISCONNECT; INSIDE DIAMETER: 32 MM; OUTSIDE DIAMETER: 81 MM; LENGTH: 33.3 MM; MATERIAL: STEEL; SPECIAL FEATURES: KEY: 10 X 8 MM; BRAND: TB WOODS\n\nVALVE,                           11.000   EA\nGATE:KREBS;TG150PN10AC174PG\nRLSTSG\n\nVALVE, GATE: OEM: KREBBS, PART NO: TG 150PN10-AC-174-PGR-LST-SG; VALVE SIZE: 150 MM; DESIGN RATING: 150 PSI; CONNECTION TYPE: FLANGE; STYLE: KNIFE; PORT TYPE: STRAIGHT BORE\n\n,TG 150PN10-AC-174-PGR-LST-SG\n\nHeavy Duty Fire Fighter Gloves                20.000\n\nHEAVY DUTY FIRE FIGHTER\nGLOVES\nMANUFACTURER: PAK TECH\nLEATHER; PART ID: PTL-9187\nOUTER MATERIAL:Silicone Coated\nKevlar Fabric\nPALM THICKNESS: 1.3 mm\nCOLOR: Biege and Yellow\nSIZE RANGE:  11\n\nSC-LC Patch Cord/5 meters                    40.000   EA\n\nPOLE:ELECTRICAL;TEAK;12M          20.000   EA\n\nPOLE: TYPE: ELECTRICAL; MATERIAL: TEAK WOOD; LENGTH: 12 METERS";
+$('go').onclick=function(){run($('raw').value)};
+$('s1').onclick=function(){$('raw').value=X1;run(X1)};
+$('s2').onclick=function(){$('raw').value=X2;run(X2)};
+$('s3').onclick=function(){$('raw').value=X3;run(X3)};
+$('s4').onclick=function(){$('raw').value=X4;run(X4)};
+$('clr').onclick=function(){$('raw').value='';$('out').hidden=true;ITEMS=[]};
+$('loc').onchange=function(){if(S)refresh()};
+$('cp').onclick=function(){cp($('rfq').value,$('cps'))};
+$('allr').onclick=function(){$('rfq').value=rfqAll();$('cps').textContent='Showing the RFQ for all items.'};
+$('tsv').onclick=function(){var R=[['#','Item','Qty','Unit','Manufacturer','Brand','Part no','Model','Type','Size','Materials','Flags']];
+ ITEMS.forEach(function(it,i){R.push([i+1,H(it,'itemName'),H(it,'qty'),H(it,'unit'),H(it,'manufacturer'),H(it,'brand'),H(it,'partNo'),H(it,'model'),H(it,'type'),H(it,'size'),H(it,'materials').replace(/\n/g,'; '),warns(it).length])});
+ cp(R.map(function(r){return r.join('\t')}).join('\n'),$('tss'))};
+try{var sv=localStorage.getItem('ss_raw');if(sv)$('raw').value=sv}catch(e){}
+</script></main><script>
+if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(e){console.warn('SW failed',e)})})}
+</script>
+</body></html>
